@@ -97,6 +97,25 @@ integration, which is locked to healthchecks.io's own bot) pointed at our bot:
   if the latest dated folder is >36h old (missed backup) or contains a
   zero-byte file (corrupted/failed dump).
 
+- **`scripts/check_reboot.sh`** — daily at 11:00 on Vampire, checks both hosts
+  via `needs-restarting -r`. Alerts if a kernel/glibc/systemd update is pending
+  a reboot to take effect, clears once rebooted. Added 2026-10-22 alongside
+  switching `dnf-automatic` from `upgrade_type = security` (effectively a
+  no-op on CentOS Stream — see below) to `upgrade_type = default`, so updates
+  actually apply continuously; this is the one thing that can't be automated
+  away, since an unattended reboot on a live box is its own risk.
+
+### dnf-automatic note
+
+Both hosts have `dnf-automatic-install.timer` enabled (daily ~6am,
+`apply_updates = yes`), but it was set to `upgrade_type = security` — which,
+on CentOS Stream, never matched anything (logs showed "No security updates
+needed" every single day for months despite 268-323 regular updates sitting
+available, because Stream doesn't carry the same security-advisory metadata
+RHEL/Alma do). Changed to `upgrade_type = default` 2026-10-22 so it actually
+patches. Trade-off: no more human review of what's being applied before it
+lands — accepted deliberately, the user wasn't doing that review anyway.
+
 ## Cron entries
 
 Vampire:
@@ -110,6 +129,7 @@ Vampire:
 */15 * * * * /home/sntr/git/sntrserv-monitoring/scripts/check_teslamate.sh
 0 */6 * * * /home/sntr/git/sntrserv-monitoring/scripts/check_certs.sh
 30 10 * * * /home/sntr/git/sntrserv-monitoring/scripts/check_backups.sh
+0 11 * * * /home/sntr/git/sntrserv-monitoring/scripts/check_reboot.sh
 ```
 
 Corsair:
