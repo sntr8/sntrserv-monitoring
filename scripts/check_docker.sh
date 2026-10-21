@@ -5,11 +5,7 @@ source /home/sntr/.telegram_alert.env
 
 STATE_DIR="/home/sntr/scripts"
 
-notify() {
-    curl -s --max-time 10 -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-        -d chat_id="${TELEGRAM_CHAT_ID}" \
-        -d text="$1" >/dev/null
-}
+source /home/sntr/git/sntrserv-monitoring/lib/notify.sh
 
 docker ps -a --format '{{.Names}}|{{.Status}}' | while IFS='|' read -r name status; do
     state_file="${STATE_DIR}/.docker_alerted_${name}"
@@ -21,12 +17,12 @@ docker ps -a --format '{{.Names}}|{{.Status}}' | while IFS='|' read -r name stat
 
     if [ "$problem" -eq 1 ]; then
         if [ ! -f "$state_file" ]; then
-            notify "🔴 Docker container '${name}' is unhealthy: ${status}"
+            notify "🔴 <b>${name}</b>: unhealthy (${status})"
             touch "$state_file"
         fi
     else
         if [ -f "$state_file" ]; then
-            notify "✅ Docker container '${name}' recovered: ${status}"
+            notify "✅ <b>${name}</b>: recovered (${status})"
             rm -f "$state_file"
         fi
     fi

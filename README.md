@@ -18,6 +18,15 @@ then `curl` the Telegram API from Vampire — never deploy a Telegram-sending
 script to run directly on Corsair, it'll silently fail to notify.
 `hc-ping.com` calls are fine to run directly on Corsair, that path works.
 
+## Message format
+
+All direct-Telegram alerts (everything except the healthchecks.io-routed
+heartbeat) go through the shared `lib/notify.sh`, which sends with
+`parse_mode=HTML`. Every message follows `<emoji> <b>IDENTIFIER</b>: detail`
+— 🔴 for a real failure, ⚠️ for a threshold crossed, ✅ for recovery.
+IDENTIFIER is whatever's most specific to the problem (host name, container
+name, domain, service name). Keep new checks consistent with this.
+
 ## Components
 
 - **`scripts/heartbeat-ping.sh`** — run every 5 min via cron on each host. Pings

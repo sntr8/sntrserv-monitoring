@@ -16,11 +16,7 @@ HOSTS=(
     tesla.sntrserv.net
 )
 
-notify() {
-    curl -s --max-time 10 -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-        -d chat_id="${TELEGRAM_CHAT_ID}" \
-        -d text="$1" >/dev/null
-}
+source /home/sntr/git/sntrserv-monitoring/lib/notify.sh
 
 for host in "${HOSTS[@]}"; do
     state_file="${STATE_DIR}/.cert_alerted_${host}"
@@ -38,12 +34,12 @@ for host in "${HOSTS[@]}"; do
 
     if [ "$days_left" -lt "$THRESHOLD_DAYS" ]; then
         if [ ! -f "$state_file" ]; then
-            notify "⚠️ ${host}: TLS cert expires in ${days_left} days (${end_date})"
+            notify "⚠️ <b>${host}</b>: TLS cert expires in ${days_left} days (${end_date})"
             touch "$state_file"
         fi
     else
         if [ -f "$state_file" ]; then
-            notify "✅ ${host}: TLS cert renewed, ${days_left} days remaining"
+            notify "✅ <b>${host}</b>: TLS cert renewed, ${days_left} days remaining"
             rm -f "$state_file"
         fi
     fi

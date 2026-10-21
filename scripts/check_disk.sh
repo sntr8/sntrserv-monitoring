@@ -5,11 +5,7 @@ source /home/sntr/.telegram_alert.env
 
 THRESHOLD=85
 
-notify() {
-    curl -s --max-time 10 -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-        -d chat_id="${TELEGRAM_CHAT_ID}" \
-        -d text="$1" >/dev/null
-}
+source /home/sntr/git/sntrserv-monitoring/lib/notify.sh
 
 check_host() {
     local host_label="$1"
@@ -25,16 +21,16 @@ check_host() {
 
     if [ "$usage" -ge "$THRESHOLD" ]; then
         if [ ! -f "$state_file" ]; then
-            notify "⚠️ ${host_label}: disk usage at ${usage}% (threshold ${THRESHOLD}%)"
+            notify "⚠️ <b>${host_label}</b>: disk usage at ${usage}% (threshold ${THRESHOLD}%)"
             touch "$state_file"
         fi
     else
         if [ -f "$state_file" ]; then
-            notify "✅ ${host_label}: disk usage back down to ${usage}%"
+            notify "✅ <b>${host_label}</b>: disk usage back down to ${usage}%"
             rm -f "$state_file"
         fi
     fi
 }
 
-check_host "vampire" "df --output=pcent / | tail -1"
-check_host "corsair" "ssh corsair.sntrserv.net \"df --output=pcent / | tail -1\""
+check_host "Vampire" "df --output=pcent / | tail -1"
+check_host "Corsair" "ssh corsair.sntrserv.net \"df --output=pcent / | tail -1\""

@@ -9,11 +9,7 @@ REQUIRED_CONSECUTIVE=3      # must breach this many checks in a row before alert
 
 STATE_DIR="/home/sntr/scripts"
 
-notify() {
-    curl -s --max-time 10 -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-        -d chat_id="${TELEGRAM_CHAT_ID}" \
-        -d text="$1" >/dev/null
-}
+source /home/sntr/git/sntrserv-monitoring/lib/notify.sh
 
 track_and_alert() {
     local metric="$1" host="$2" breached="$3" detail="$4"
@@ -26,13 +22,13 @@ track_and_alert() {
         count=$((count + 1))
         echo "$count" > "$counter_file"
         if [ "$count" -ge "$REQUIRED_CONSECUTIVE" ] && [ ! -f "$alert_file" ]; then
-            notify "⚠️ ${host}: ${detail}"
+            notify "⚠️ <b>${host}</b>: ${detail}"
             touch "$alert_file"
         fi
     else
         rm -f "$counter_file"
         if [ -f "$alert_file" ]; then
-            notify "✅ ${host}: ${metric} back to normal"
+            notify "✅ <b>${host}</b>: ${metric} back to normal"
             rm -f "$alert_file"
         fi
     fi
@@ -64,5 +60,5 @@ check_host() {
     track_and_alert "mem" "$host" "$mem_breached" "only ${mem_avail_pct}% memory available for ${REQUIRED_CONSECUTIVE}+ checks"
 }
 
-check_host "vampire" ""
-check_host "corsair" "ssh corsair.sntrserv.net"
+check_host "Vampire" ""
+check_host "Corsair" "ssh corsair.sntrserv.net"

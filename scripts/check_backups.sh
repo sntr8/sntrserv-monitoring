@@ -8,14 +8,11 @@ REGION="eu-north-1"
 STALE_THRESHOLD_HOURS=36
 STATE_DIR="/home/sntr/scripts"
 
-notify() {
-    curl -s --max-time 10 -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-        -d chat_id="${TELEGRAM_CHAT_ID}" \
-        -d text="$1" >/dev/null
-}
+source /home/sntr/git/sntrserv-monitoring/lib/notify.sh
 
 check_prefix() {
     local prefix="$1"
+    local display="${prefix^}"
     local state_file="${STATE_DIR}/.backup_alerted_${prefix}"
 
     local latest_date
@@ -50,12 +47,12 @@ check_prefix() {
 
     if [ "$problem" -eq 1 ]; then
         if [ ! -f "$state_file" ]; then
-            notify "🔴 Backup (${prefix}): ${reason}"
+            notify "🔴 <b>${display}</b>: backup ${reason}"
             touch "$state_file"
         fi
     else
         if [ -f "$state_file" ]; then
-            notify "✅ Backup (${prefix}): back to normal, latest from ${latest_date}"
+            notify "✅ <b>${display}</b>: backup back to normal, latest from ${latest_date}"
             rm -f "$state_file"
         fi
     fi
