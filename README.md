@@ -105,6 +105,28 @@ integration, which is locked to healthchecks.io's own bot) pointed at our bot:
   actually apply continuously; this is the one thing that can't be automated
   away, since an unattended reboot on a live box is its own risk.
 
+- **`scripts/check_image_updates.sh`** — weekly, Mondays at 09:00 on Vampire.
+  Compares each running container's image digest against the one its tag now
+  points to in the registry, and alerts when upstream has published a newer
+  build. Notify-only on purpose: Authelia, TeslaMate and UniFi all run schema
+  or config migrations on startup, so an unattended bump at 03:00 is its own
+  risk. Added 2026-10-22 after a reboot turned up images up to 14 months old.
+  Skips our own `ghcr.io/sntr8/*` images (registry ahead of container there is
+  a deploy question, not an update one) and the locally built `patchwork:dev`
+  images, which have no registry digest to compare. Takes `--seed` to record
+  current state silently, for when the backlog is already known.
+
+  **Known limitation:** this detects a *tag being rebuilt*, not a newer version
+  existing under a different tag. Two real cases it misses: `jacobalberty/unifi`
+  is pinned to `v9.3.45` and that publisher stopped pushing to Docker Hub in
+  December 2025, and `teslamate/teslamate:latest` matches the registry while
+  TeslaMate's own logs report 4.0.1 vs 4.3.0 available. Major-version drift
+  still needs an occasional manual look; this catches the security rebuilds.
+
+  Docker Hub rate-limits anonymous manifest requests (HTTP 429). Nine images
+  once a week is far inside that, but the script counts failed lookups and
+  alerts if half or more fail, so a throttled or broken check can't go quiet.
+
 ### dnf-automatic note
 
 Both hosts have `dnf-automatic-install.timer` enabled (daily ~6am,
@@ -130,6 +152,7 @@ Vampire:
 0 */6 * * * /home/sntr/git/sntrserv-monitoring/scripts/check_certs.sh
 30 10 * * * /home/sntr/git/sntrserv-monitoring/scripts/check_backups.sh
 0 20 * * * /home/sntr/git/sntrserv-monitoring/scripts/check_reboot.sh
+0 9  * * 1 /home/sntr/git/sntrserv-monitoring/scripts/check_image_updates.sh
 ```
 
 Corsair:
