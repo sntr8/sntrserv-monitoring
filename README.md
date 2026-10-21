@@ -97,7 +97,7 @@ integration, which is locked to healthchecks.io's own bot) pointed at our bot:
   if the latest dated folder is >36h old (missed backup) or contains a
   zero-byte file (corrupted/failed dump).
 
-- **`scripts/check_reboot.sh`** — daily at 11:00 on Vampire, checks both hosts
+- **`scripts/check_reboot.sh`** — daily at 20:00 on Vampire, checks both hosts
   via `needs-restarting -r`. Alerts if a kernel/glibc/systemd update is pending
   a reboot to take effect, clears once rebooted. Added 2026-10-22 alongside
   switching `dnf-automatic` from `upgrade_type = security` (effectively a
@@ -129,7 +129,7 @@ Vampire:
 */15 * * * * /home/sntr/git/sntrserv-monitoring/scripts/check_teslamate.sh
 0 */6 * * * /home/sntr/git/sntrserv-monitoring/scripts/check_certs.sh
 30 10 * * * /home/sntr/git/sntrserv-monitoring/scripts/check_backups.sh
-0 11 * * * /home/sntr/git/sntrserv-monitoring/scripts/check_reboot.sh
+0 20 * * * /home/sntr/git/sntrserv-monitoring/scripts/check_reboot.sh
 ```
 
 Corsair:
