@@ -34,6 +34,12 @@ script to run directly on Corsair, it'll silently fail to notify.
   Telegram if either crosses 85%, clears when back under. Direct Telegram
   alerting, no healthchecks.io involved — this doesn't need a dead-man's-switch
   since Vampire running the cron at all proves Vampire is up.
+- **`scripts/check_resources.sh`** — runs every 5 min on Vampire only, checks
+  CPU load and memory on both Vampire (locally) and Corsair (via SSH). Load is
+  compared as a ratio to core count (threshold 1.5x), memory as % available
+  (threshold 15%). Requires 3 consecutive breaches before alerting, to avoid
+  noise from brief spikes — effectively a ~15 min sustained-condition check.
+  Direct Telegram alerting, same reasoning as `check_disk.sh`.
 - **`scripts/check_erikoispumppaus.sh`** — runs every 5 min on Vampire. Curls
   the real public URL `https://workform.erikoispumppaus.fi` (revenue-generating
   site) and alerts directly via Telegram if it's not a 200, clears on recovery.
@@ -69,6 +75,7 @@ Vampire:
 */15 * * * * /home/sntr/git/sntrserv-monitoring/scripts/check_php_patch.sh
 */5  * * * * /home/sntr/git/sntrserv-monitoring/scripts/check_erikoispumppaus.sh
 */15 * * * * /home/sntr/git/sntrserv-monitoring/scripts/check_disk.sh
+*/5  * * * * /home/sntr/git/sntrserv-monitoring/scripts/check_resources.sh
 ```
 
 Corsair:
