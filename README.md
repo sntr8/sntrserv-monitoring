@@ -67,6 +67,27 @@ integration, which is locked to healthchecks.io's own bot) pointed at our bot:
 - Body (down): `chat_id=<CHAT_ID>&text=\U0001f534 $NAME is DOWN since $NOW`
 - Body (up): `chat_id=<CHAT_ID>&text=✅ $NAME recovered at $NOW`
 
+- **`scripts/check_docker.sh`** — every 5 min on Vampire. Flags any container
+  whose status isn't `Up...` or contains `(unhealthy)`. Per-container alert
+  state, so a crash alerts once and a recovery clears it. Caveat: if you
+  intentionally stop a container for maintenance, this will alert and keep
+  alerting until it's running again — no "pause" mechanism built, kept simple
+  for v1.
+- **`scripts/check_teslamate.sh`** — every 15 min on Vampire. Queries the
+  `positions` table in `teslamate-database-1` directly for the most recent
+  timestamp; alerts if the car hasn't reported in 24h+ (the original 2026-06-22
+  incident: the car silently stopped reporting for an unknown period before
+  anyone noticed manually).
+- **`scripts/check_certs.sh`** — every 6h on Vampire. Checks real TLS cert
+  expiry (via `openssl s_client` against the live port 443, not reading files)
+  for every public site on Corsair plus `tesla.sntrserv.net`. Catches a silent
+  certbot/Traefik renewal failure before it becomes an outage. Threshold 14
+  days.
+- **`scripts/check_backups.sh`** — daily at 10:30 (backups run at 03:00).
+  Checks the S3 bucket for both the `vampire/` and `corsair/` prefixes: alerts
+  if the latest dated folder is >36h old (missed backup) or contains a
+  zero-byte file (corrupted/failed dump).
+
 ## Cron entries
 
 Vampire:
@@ -76,6 +97,10 @@ Vampire:
 */5  * * * * /home/sntr/git/sntrserv-monitoring/scripts/check_erikoispumppaus.sh
 */15 * * * * /home/sntr/git/sntrserv-monitoring/scripts/check_disk.sh
 */5  * * * * /home/sntr/git/sntrserv-monitoring/scripts/check_resources.sh
+*/5  * * * * /home/sntr/git/sntrserv-monitoring/scripts/check_docker.sh
+*/15 * * * * /home/sntr/git/sntrserv-monitoring/scripts/check_teslamate.sh
+0 */6 * * * /home/sntr/git/sntrserv-monitoring/scripts/check_certs.sh
+30 10 * * * /home/sntr/git/sntrserv-monitoring/scripts/check_backups.sh
 ```
 
 Corsair:
