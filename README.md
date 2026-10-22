@@ -33,11 +33,6 @@ name, domain, service name). Keep new checks consistent with this.
   that host's healthchecks.io check. If a host misses two check-ins in a row,
   healthchecks.io fires its "down" webhook, which posts straight to our Telegram
   bot (see below) instead of using healthchecks.io's own bot.
-- **`scripts/check_php_patch.sh`** — runs every 15 min on Vampire. Checks Corsair
-  for the PHP 8.3.36 security fix (CVE-2026-109618 / CVE-2026-109619) via
-  `dnf check-update` over SSH, and Telegram-notifies once when it becomes
-  available. Temporary — remove once Corsair is patched and this isn't a live
-  concern anymore.
 - **`scripts/check_disk.sh`** — runs every 15 min on Vampire only. Checks root
   disk usage on both Vampire (locally) and Corsair (via SSH), alerts via
   Telegram if either crosses 85%, clears when back under. Direct Telegram
@@ -143,7 +138,6 @@ lands — accepted deliberately, the user wasn't doing that review anyway.
 Vampire:
 ```
 */5  * * * * /home/sntr/git/sntrserv-monitoring/scripts/heartbeat-ping.sh
-*/15 * * * * /home/sntr/git/sntrserv-monitoring/scripts/check_php_patch.sh
 */5  * * * * /home/sntr/git/sntrserv-monitoring/scripts/check_erikoispumppaus.sh
 */15 * * * * /home/sntr/git/sntrserv-monitoring/scripts/check_disk.sh
 */5  * * * * /home/sntr/git/sntrserv-monitoring/scripts/check_resources.sh
