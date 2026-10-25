@@ -110,11 +110,35 @@ integration, which is locked to healthchecks.io's own bot) pointed at our bot:
   intentionally stop a container for maintenance, this will alert and keep
   alerting until it's running again — no "pause" mechanism built, kept simple
   for v1.
-- **`scripts/check_teslamate.sh`** — every 15 min on Vampire. Queries the
-  `positions` table in `teslamate-database-1` directly for the most recent
-  timestamp; alerts if the car hasn't reported in 24h+ (the original 2026-06-22
-  incident: the car silently stopped reporting for an unknown period before
-  anyone noticed manually).
+- **`scripts/check_teslamate.sh`** — every 15 min on Vampire. Asks whether
+  TeslaMate's connection to Tesla is working, which is a different question from
+  whether the car has moved. Three independent conditions, each with its own
+  alert state:
+  1. No Tesla token refresh logged in 8h. TeslaMate refreshes at 6h and logs
+     almost nothing else while the car is offline, so this is its proof of life
+     and its proof that auth still works. Suppressed if the container started
+     inside the window and has not had time to log one.
+  2. Three or more forbidden/unauthorized responses on outbound Tesla API calls
+     in 2h. This is the 2026-06-22 signature. Matching is restricted to lines
+     naming a Tesla host, because TeslaMate also logs the requests it serves;
+     plain timeouts from Tesla are routine and deliberately do not match.
+  3. TeslaMate's own MQTT `healthy` flag reporting false, read from Mosquitto.
+     A missing flag is treated as unknown, not as a fault, since Mosquitto being
+     down is `check_docker.sh`'s job.
+
+  Position freshness is only consulted when the car reports `driving`, where a
+  gap means trip data is being lost right now.
+
+  **It no longer alerts on an idle car**, which is what the original version
+  did. That version alerted when `positions` had no new row in 24h, and was
+  wrong in both directions. TeslaMate only writes positions while the car is
+  awake, so every normal parked day or week raised an alert; and during the
+  2026-06-22 outage the streaming ingest kept writing positions the whole time
+  (only the REST path, and so the `drives` rollup, was broken), so the check
+  would have stayed silent through the one incident it existed to catch.
+
+  This matters more than a stale dashboard: TeslaMate is the e-logbook for
+  kilometrikorvaus filing, so an unrecorded trip is lost data.
 - **`scripts/check_certs.sh`** — every 6h on Vampire. Checks real TLS cert
   expiry (via `openssl s_client` against the live port 443, not reading files)
   for every domain in `lib/sites.sh`. Catches a silent certbot/Traefik renewal
