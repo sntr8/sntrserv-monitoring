@@ -3,27 +3,21 @@ set -euo pipefail
 
 source /home/sntr/.telegram_alert.env
 
-THRESHOLD_DAYS=14
-STATE_DIR="/home/sntr/scripts"
-
-HOSTS=(
-    sleeves.sntrserv.net
-    kuvat.lehtone.nl
-    workform.erikoispumppaus.fi
-    patchwork.sntrserv.net
-    techdemo.saaresti.eu
-    kivikarinkuja.sntrserv.net
-    tesla.sntrserv.net
-)
-
 source /home/sntr/git/sntrserv-monitoring/lib/notify.sh
+source /home/sntr/git/sntrserv-monitoring/lib/tiers.sh
+source /home/sntr/git/sntrserv-monitoring/lib/sites.sh
 
-for host in "${HOSTS[@]}"; do
-    state_file="${STATE_DIR}/.cert_alerted_${host}"
+# threshold_days:emoji:consecutive, least severe first. Days remaining is a
+# continuous value that only gets worse, so it uses the tiered helper: 14 days
+# is "certbot has had a chance and should have renewed by now", 3 days is "this
+# is about to break in public".
+CERT_TIERS="14:⚠️:1 3:🔴:1"
 
+while read -r host; do
     end_date=$(echo | timeout 10 openssl s_client -connect "${host}:443" -servername "$host" 2>/dev/null \
         | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
 
+    # Unreachable host is check_sites.sh's job to report, not this script's.
     if [ -z "$end_date" ]; then
         continue
     fi
@@ -32,15 +26,7 @@ for host in "${HOSTS[@]}"; do
     now_epoch=$(date +%s)
     days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
 
-    if [ "$days_left" -lt "$THRESHOLD_DAYS" ]; then
-        if [ ! -f "$state_file" ]; then
-            notify "⚠️ <b>${host}</b>: TLS cert expires in ${days_left} days (${end_date})"
-            touch "$state_file"
-        fi
-    else
-        if [ -f "$state_file" ]; then
-            notify "✅ <b>${host}</b>: TLS cert renewed, ${days_left} days remaining"
-            rm -f "$state_file"
-        fi
-    fi
-done
+    tiered_alert "cert_${host}" "$host" "$days_left" below "$CERT_TIERS" \
+        "TLS cert expires in ${days_left} days (${end_date})" \
+        "TLS cert renewed, ${days_left} days remaining"
+done < <(site_domains)

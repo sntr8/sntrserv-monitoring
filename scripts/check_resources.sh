@@ -3,36 +3,23 @@ set -euo pipefail
 
 source /home/sntr/.telegram_alert.env
 
-LOAD_RATIO_THRESHOLD=1.5    # 5-min load average / core count
-MEM_AVAIL_THRESHOLD=15      # alert if available memory drops below this %
-REQUIRED_CONSECUTIVE=3      # must breach this many checks in a row before alerting
-
-STATE_DIR="/home/sntr/scripts"
-
 source /home/sntr/git/sntrserv-monitoring/lib/notify.sh
+source /home/sntr/git/sntrserv-monitoring/lib/tiers.sh
 
-track_and_alert() {
-    local metric="$1" host="$2" breached="$3" detail="$4"
-    local counter_file="${STATE_DIR}/.${metric}_counter_${host}"
-    local alert_file="${STATE_DIR}/.${metric}_alerted_${host}"
+# threshold:emoji:consecutive-breaches-needed, least severe first.
+#
+# The mild tiers keep the old 3-consecutive-breach dampener, since a 5-min load
+# average crossing 1.5x for one check is usually a build or a backup, not a
+# problem. The severe tiers drop to 1: a host with 5% memory left may be dead
+# before three checks have run, so waiting 15 minutes to say so is useless.
+LOAD_TIERS="1.5:⚠️:3 3:🔴:1 5:🔴:1"     # 5-min load average / core count
+MEM_TIERS="15:⚠️:3 10:⚠️:3 5:🔴:1"      # % memory available, lower is worse
 
-    if [ "$breached" = "1" ]; then
-        local count=0
-        [ -f "$counter_file" ] && count=$(cat "$counter_file")
-        count=$((count + 1))
-        echo "$count" > "$counter_file"
-        if [ "$count" -ge "$REQUIRED_CONSECUTIVE" ] && [ ! -f "$alert_file" ]; then
-            notify "⚠️ <b>${host}</b>: ${detail}"
-            touch "$alert_file"
-        fi
-    else
-        rm -f "$counter_file"
-        if [ -f "$alert_file" ]; then
-            notify "✅ <b>${host}</b>: ${metric} back to normal"
-            rm -f "$alert_file"
-        fi
-    fi
-}
+# % of swap in use. On its own this is a soft signal: Linux will happily leave
+# idle pages in swap with no ill effect, so a steady 40% is not a problem. It
+# earns its place as the EARLIER warning than MemAvailable, which only drops
+# once swap is already exhausted. Hence generous mild tiers and a dampener.
+SWAP_TIERS="60:⚠️:3 80:⚠️:3 95:🔴:1"
 
 check_host() {
     local host="$1" ssh_prefix="$2"
@@ -42,22 +29,37 @@ check_host() {
         nproc_val=$(nproc)
         load5=$(awk '{print $2}' /proc/loadavg)
         read -r total avail < <(free -m | awk '/^Mem:/{print $2, $7}')
+        read -r swap_total swap_used < <(free -m | awk '/^Swap:/{print $2, $3}')
     else
         nproc_val=$(eval "$ssh_prefix nproc")
         load5=$(eval "$ssh_prefix cat /proc/loadavg" | awk '{print $2}')
         read -r total avail < <(eval "$ssh_prefix free -m" | awk '/^Mem:/{print $2, $7}')
+        read -r swap_total swap_used < <(eval "$ssh_prefix free -m" | awk '/^Swap:/{print $2, $3}')
     fi
 
-    local load_ratio load_breached=0
+    local load_ratio mem_avail_pct
     load_ratio=$(awk -v l="$load5" -v n="$nproc_val" 'BEGIN{printf "%.2f", l/n}')
-    awk -v r="$load_ratio" -v t="$LOAD_RATIO_THRESHOLD" 'BEGIN{exit !(r>t)}' && load_breached=1
-
-    local mem_avail_pct mem_breached=0
     mem_avail_pct=$(awk -v a="$avail" -v t="$total" 'BEGIN{printf "%.0f", (a*100)/t}')
-    [ "$mem_avail_pct" -lt "$MEM_AVAIL_THRESHOLD" ] && mem_breached=1
 
-    track_and_alert "load" "$host" "$load_breached" "5-min load ratio ${load_ratio}x (${nproc_val} cores) for ${REQUIRED_CONSECUTIVE}+ checks"
-    track_and_alert "mem" "$host" "$mem_breached" "only ${mem_avail_pct}% memory available for ${REQUIRED_CONSECUTIVE}+ checks"
+    # A host with swap disabled reports total 0; skip rather than divide by it.
+    local swap_used_pct=""
+    if [ "${swap_total:-0}" -gt 0 ]; then
+        swap_used_pct=$(awk -v u="$swap_used" -v t="$swap_total" 'BEGIN{printf "%.0f", (u*100)/t}')
+    fi
+
+    tiered_alert load "$host" "$load_ratio" above "$LOAD_TIERS" \
+        "5-min load ratio ${load_ratio}x on ${nproc_val} cores (crossed {tier}x)" \
+        "load back to normal (${load_ratio}x)"
+
+    tiered_alert mem "$host" "$mem_avail_pct" below "$MEM_TIERS" \
+        "only ${mem_avail_pct}% memory available (crossed {tier}%)" \
+        "memory back to normal (${mem_avail_pct}% available)"
+
+    if [ -n "$swap_used_pct" ]; then
+        tiered_alert swap "$host" "$swap_used_pct" above "$SWAP_TIERS" \
+            "swap ${swap_used_pct}% used, ${swap_used}MB of ${swap_total}MB (crossed {tier}%)" \
+            "swap back to normal (${swap_used_pct}% used)"
+    fi
 }
 
 check_host "Vampire" ""
