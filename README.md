@@ -74,11 +74,26 @@ name, domain, service name). Keep new checks consistent with this.
 - **`scripts/check_sites.sh`** — runs every 5 min on Vampire. Curls every
   domain in `lib/sites.sh` and alerts if the response code isn't the expected
   one, clears on recovery. Up/down is binary, so this keeps the boolean
-  state-file pattern rather than the tiered one. Deliberately *not* routed
+  state-file pattern rather than the tiered one, with a two-consecutive-failure
+  dampener on top (`FAIL_THRESHOLD`, extra state file
+  `.site_fail_count_<domain>`): the *code* is binary but the response *time* is
+  not, and a site whose render depends on third-party upstreams can miss the
+  12s budget for one run without being down. A real outage is reported 5 min
+  later; a single-run blip is not reported at all. Deliberately *not* routed
   through healthchecks.io: it complements the heartbeat rather than duplicating
   it, since the heartbeat catches "server is down" and this catches "server is
   up but the app itself is broken" (container crash, bad vhost, DB issue), and
   Vampire running this cron at all already proves Vampire is up.
+
+  **Fixed 2026-10-28: timeouts were reported as HTTP statuses.** The curl call
+  ended in `|| echo "000"`, but `-w "%{http_code}"` already prints `000` when
+  the request never completed *and* curl exits non-zero, so both fired and the
+  variable became `000000`. That failed the `= "000"` test, so every timeout
+  was announced as `HTTP 000000, expected 200` instead of "no response within
+  12s". The fallback is gone; an empty capture is normalised to `000`. The
+  alerts that surfaced this were lunchy, the one site in the list that fetches
+  13 third-party pages while rendering, which is also what motivated the
+  dampener above.
 
   **Replaced `check_erikoispumppaus.sh` on 2026-10-22.** That script curled only
   the one revenue site, so any of the other 12 domains returning a 500 was
